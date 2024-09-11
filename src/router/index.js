@@ -7,6 +7,11 @@ import Dashboard from "../components/DashboardViews.vue";
 import Prefectures from "../components/PrefectureViews.vue";
 import rapport from "../views/rapportCarousel.vue";
 import Produits from "../components/ProduitViews.vue";
+import Marche from "../components/MarcheViews.vue";
+import Magasin from "../components/MagasinViews.vue";
+import Evolution from "../components/EvolutionViews.vue";
+import Pourcentage from "../components/PourcentageViews.vue";
+import Tableau from "../components/tableau.vue";
 
 const routes = [
   {
@@ -16,7 +21,7 @@ const routes = [
   },
   {
     path: "/dashboard",
-    name: "Dashboard",
+    name: "dashboard",
     component: Dashboard,
   },
   {
@@ -33,6 +38,31 @@ const routes = [
     path: "/produit",
     name: "produit",
     component: Produits,
+  },
+  {
+    path: "/marche",
+    name: "marche",
+    component: Marche,
+  },
+  {
+    path: "/magasin",
+    name: "magasin",
+    component: Magasin,
+  },
+  {
+    path: "/evolution",
+    name: "evolution",
+    component: Evolution,
+  },
+  {
+    path: "/pourcentage",
+    name: "Pourcentage",
+    component: Pourcentage,
+  },
+  {
+    path: "/tableau",
+    name: "tableau",
+    component: Tableau,
   },
 ];
 

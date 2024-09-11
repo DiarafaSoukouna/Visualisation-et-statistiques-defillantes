@@ -9,7 +9,12 @@
   },
   "dependencies": {
     "axios": "^1.7.7",
+    "client": "^0.0.1",
     "core-js": "^3.8.3",
+    "highcharts": "^11.4.8",
+    "highcharts-accessibility": "^0.1.7",
+    "highcharts-export-data": "^0.1.7",
+    "highcharts-exporting": "^0.1.7",
     "vue": "^3.2.13",
     "vue-router": "^4.4.3"
   },

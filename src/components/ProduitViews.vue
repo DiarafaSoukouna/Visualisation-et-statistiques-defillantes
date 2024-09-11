@@ -48,6 +48,7 @@ export default {
   data() {
     return {
       slides: [],
+      intervalId: null, // To store the interval ID for cleanup
     };
   },
   async mounted() {
@@ -118,19 +119,39 @@ export default {
     startCarousel() {
       let currentSlide = 0;
       const slideDuration = 5000; // Duration of each slide in milliseconds
-      const totalSlides = this.$refs.carousel.children.length;
 
-      setInterval(() => {
-        currentSlide = (currentSlide + 1) % totalSlides;
-        this.$refs.carousel.style.transform = `translateX(-${
-          currentSlide * 100
-        }%)`;
-      }, slideDuration);
+      // Use nextTick to ensure the carousel is rendered
+      this.$nextTick(() => {
+        const totalSlides = this.$refs.carousel
+          ? this.$refs.carousel.children.length
+          : 0;
 
-      //   setTimeout(() => {
-      //     this.$router.push({ name: "marche" }); // Adjust the route as necessary
-      //   }, 30000); // 30 seconds
+        if (totalSlides === 0) {
+          console.error("No slides available for the carousel.");
+          return;
+        }
+
+        this.intervalId = setInterval(() => {
+          currentSlide = (currentSlide + 1) % totalSlides;
+
+          // Check if the carousel ref exists before accessing its style
+          if (this.$refs.carousel) {
+            this.$refs.carousel.style.transform = `translateX(-${
+              currentSlide * 100
+            }%)`;
+          } else {
+            console.error("Carousel element not found.");
+            clearInterval(this.intervalId); // Stop the interval if the element is missing
+          }
+        }, slideDuration);
+      });
     },
+  },
+  unmounted() {
+    // Clear the interval to prevent errors when the component is destroyed
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
   },
 };
 </script>
