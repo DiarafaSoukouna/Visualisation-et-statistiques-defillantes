@@ -11,7 +11,7 @@ import Marche from "../components/MarcheViews.vue";
 import Magasin from "../components/MagasinViews.vue";
 import Evolution from "../components/EvolutionViews.vue";
 import Pourcentage from "../components/PourcentageViews.vue";
-import Tableau from "../components/tableau.vue";
+import Partenaire from "../components/PartenaireViews.vue";
 
 const routes = [
   {
@@ -60,9 +60,9 @@ const routes = [
     component: Pourcentage,
   },
   {
-    path: "/tableau",
-    name: "tableau",
-    component: Tableau,
+    path: "/partenaire",
+    name: "partenaire",
+    component: Partenaire,
   },
 ];
 

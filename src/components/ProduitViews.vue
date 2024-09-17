@@ -1,38 +1,57 @@
 <template>
-  <div>
-    <h1>Produits</h1>
+  <h1>PRIX MOYEN EN FCFA PAR REGION</h1>
+  <div v-if="slides && textes && localites">
     <div class="carousel-container">
       <div class="carousel" ref="carousel">
         <div
+          class="carousel-item"
           v-for="(slide, index) in slides"
           :key="index"
-          class="carousel-item"
         >
+          <div class="product-details">
+            <div class="containerh">
+              <h2 class="product-name">{{ slide.nom_produit }}</h2>
+            </div>
+
+            <img
+              class="product-image"
+              :src="slide.image"
+              :alt="slide.nom_produit"
+            />
+          </div>
           <div class="tables-container">
-            <table v-for="(produit, idx) in slide" :key="idx">
-              <thead>
-                <tr>
-                  <th>Image</th>
-                  <th>Nom</th>
-                  <th>Famille</th>
-                  <th>Catégorie</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <img
-                      :src="produit.image"
-                      :alt="produit.nom_produit"
-                      class="product-image"
-                    />
-                  </td>
-                  <td>{{ produit.nom_produit }}</td>
-                  <td>{{ produit.famille_produit }}</td>
-                  <td>{{ produit.categorie_produit }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <section class="table__body">
+              <table>
+                <thead>
+                  <tr>
+                    <th rowspan="2">Région</th>
+                    <th colspan="3">Prix</th>
+                    <th rowspan="2">Marché</th>
+                    <th rowspan="2">Date</th>
+                  </tr>
+                  <tr>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Moy</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(region, index) in getFilteredRegions(
+                      slide.code_produit
+                    )"
+                    :key="index"
+                  >
+                    <td>{{ region.nom_region }}</td>
+                    <td>{{ region.prix_min }}</td>
+                    <td>{{ region.prix_max }}</td>
+                    <td>{{ region.prix_moy }}</td>
+                    <td>{{ region.nb_marche }}</td>
+                    <td>{{ region.dernier_date }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
           </div>
         </div>
       </div>
@@ -42,22 +61,20 @@
 
 <script>
 import axios from "axios";
-import { getAccessToken } from "@/services/authService.js"; // Assuming you have an authService.js file
-
+import { getAccessToken } from "@/services/authService.js";
 export default {
   data() {
     return {
       slides: [],
-      intervalId: null, // To store the interval ID for cleanup
+      textes: [],
+      localites: [],
+      slideInterval: null,
     };
   },
-  async mounted() {
-    await this.populateCarousel();
-    this.startCarousel();
-  },
+
   methods: {
     async fetchData(url) {
-      const token = await getAccessToken(); // Obtain access token
+      const token = await getAccessToken();
       try {
         const response = await axios.get(url, {
           headers: {
@@ -65,92 +82,97 @@ export default {
             Authorization: `Bearer ${token}`,
           },
         });
+        console.log(response.data);
         return response.data;
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
         return [];
       }
     },
+
     async populateCarousel() {
+      const endpoints = [
+        "http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer/",
+        "http://92.112.194.154:8000/api/statistiques/prix-moyen-par-region",
+        "http://92.112.194.154:8000/api/parametrages/localites/regions",
+      ];
+
       try {
-        const produitsData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/produits"
-        );
-        const categoriesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/categories"
-        );
-        const famillesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/familles"
+        const [produit, prix_moy, region] = await axios.all(
+          endpoints.map((endpoint) => this.fetchData(endpoint))
         );
 
-        const categoriesMap = new Map(
-          categoriesData.map((categorie) => [
-            categorie.id_categorie_produit,
-            categorie.nom_categorie_produit,
-          ])
+        this.localites = region;
+        this.textes = prix_moy;
+        this.slides = produit.filter(
+          (item) =>
+            item.affichage_ecran === 1 &&
+            this.textes.some((prix) => prix.code_produit === item.code_produit)
         );
 
-        const famillesMap = new Map(
-          famillesData.map((famille) => [
-            famille.id_famille_produit,
-            famille.nom_famille_produit,
-          ])
-        );
-
-        const produitsArray = produitsData
-          .filter((produit) => produit.affichage_ecran === true)
-          .map((produit) => ({
-            nom_produit: produit.nom_produit,
-            famille_produit:
-              famillesMap.get(produit.famille_produit) || "Non défini",
-            categorie_produit:
-              categoriesMap.get(produit.categorie_produit) || "Non défini",
-            image: produit.image || "",
-          }));
-
-        const itemsPerPage = 2;
-        for (let i = 0; i < produitsArray.length; i += itemsPerPage) {
-          this.slides.push(produitsArray.slice(i, i + itemsPerPage));
-        }
+        this.textes = prix_moy;
+        console.log(this.localites, this.slides, this.textes);
       } catch (error) {
         console.error("Erreur lors du peuplement du carrousel :", error);
       }
     },
+
+    getPrix(code_produit, region) {
+      return this.textes.find(
+        (prix) => prix.code_produit === code_produit && prix.region === region
+      );
+    },
+
+    getFilteredRegions(code_produit) {
+      return this.localites.map((region) => {
+        const prix = this.getPrix(code_produit, region.nom_region);
+        return {
+          nom_region: region.nom_region,
+          prix_min: prix ? prix.prix_min : "-",
+          prix_max: prix ? prix.prix_max : "-",
+          prix_moy: prix ? prix.prix_moy : "-",
+          nb_marche: prix ? prix.nb_marche : "-",
+          dernier_date: prix ? prix.dernier_date : "-",
+        };
+      });
+    },
+
     startCarousel() {
       let currentSlide = 0;
-      const slideDuration = 5000; // Duration of each slide in milliseconds
+      const slideDuration = 8000;
 
-      // Use nextTick to ensure the carousel is rendered
       this.$nextTick(() => {
-        const totalSlides = this.$refs.carousel
-          ? this.$refs.carousel.children.length
-          : 0;
+        const totalSlides = this.$refs.carousel?.children.length || 0;
 
         if (totalSlides === 0) {
-          console.error("No slides available for the carousel.");
+          console.error("Aucun slide disponible pour le carrousel.");
           return;
         }
 
-        this.intervalId = setInterval(() => {
+        this.slideInterval = setInterval(() => {
           currentSlide = (currentSlide + 1) % totalSlides;
-
-          // Check if the carousel ref exists before accessing its style
           if (this.$refs.carousel) {
+            this.$refs.carousel.style.transition = "transform 0.5s ease-in-out";
             this.$refs.carousel.style.transform = `translateX(-${
               currentSlide * 100
             }%)`;
           } else {
-            console.error("Carousel element not found.");
-            clearInterval(this.intervalId); // Stop the interval if the element is missing
+            console.error("Élément du carrousel introuvable.");
+            clearInterval(this.slideInterval);
           }
         }, slideDuration);
       });
     },
   },
+
+  async mounted() {
+    await this.populateCarousel();
+    this.startCarousel();
+  },
+
   unmounted() {
-    // Clear the interval to prevent errors when the component is destroyed
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
+    if (this.slideInterval) {
+      clearInterval(this.slideInterval);
     }
   },
 };
@@ -167,28 +189,16 @@ body {
   height: 100vh;
 }
 
-h1 {
-  margin: 0;
-  padding: 20px;
-  background-color: #e9bc18;
-  color: #ffffff;
-  text-align: center;
-  font-size: 2rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
 .carousel-container {
   overflow: hidden;
-  height: calc(100vh - 80px);
   padding: 20px;
   box-sizing: border-box;
 }
 
 .carousel {
   display: flex;
-  transition: transform 0.5s ease;
+  transition: transform 0.5s ease-in-out;
+  will-change: transform;
 }
 
 .carousel-item {
@@ -197,6 +207,42 @@ h1 {
   box-sizing: border-box;
   gap: 20px;
   padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.product-image {
+  max-width: 200px;
+  max-height: 200px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid #eaeaea;
+}
+
+.product-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.product-name {
+  font-size: 1.5rem;
+  text-align: center;
+  color: #fff;
+}
+h1 {
+  margin: 20px 0;
+  text-align: center;
+  font-size: 2.5rem; /* Augmenté pour plus de visibilité */
+  color: #369f4a;
+}
+.containerh {
+  padding: 5px 12px;
+  background-color: #369f4a;
+  min-width: 100px;
+  max-width: 200px;
+  border-radius: 5px;
 }
 
 .tables-container {
@@ -211,13 +257,14 @@ table {
   border-collapse: collapse;
   box-shadow: 0 2px 15px rgba(64, 64, 64, 0.1);
   font-size: 1.2rem;
+  min-width: 800px;
 }
 
 th,
 td {
-  padding: 20px;
+  padding: 10px;
   border: 1px solid #ddd;
-  text-align: left;
+  text-align: center;
 }
 
 th {
@@ -233,13 +280,5 @@ tr:nth-child(even) {
 
 tr:hover {
   background-color: #e2e8f0;
-}
-
-.product-image {
-  max-width: 120px;
-  max-height: 120px;
-  object-fit: cover;
-  border-radius: 8px;
-  box-shadow: 0 2px 15px rgba(64, 64, 64, 0.1);
 }
 </style>

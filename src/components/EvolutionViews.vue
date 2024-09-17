@@ -1,43 +1,13 @@
 <template>
-  <div>
-    <h1>Tendances des Produits</h1>
-    <div class="carousel-container">
-      <div class="carousel" ref="carousel">
-        <!-- Les items du carrousel seront ajoutés ici via Vue -->
-        <div
-          v-for="(slide, index) in slides"
-          :key="index"
-          class="carousel-item"
-        >
-          <div class="tables-container">
-            <table v-for="(produit, prodIndex) in slide" :key="prodIndex">
-              <thead>
-                <tr>
-                  <th>Details</th>
-                  <th>Graphique</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <img
-                      :src="produit.image"
-                      :alt="produit.nom_produit"
-                      class="product-image"
-                    />
-                    <div>{{ produit.nom_produit }}</div>
-                  </td>
-                  <td>
-                    <div
-                      :id="'chart-' + index + '-' + prodIndex"
-                      style="width: 300px; height: 200px"
-                    ></div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+  <div class="carousel-container">
+    <div class="carousel">
+      <div
+        v-for="(familleId, index) in Object.keys(produitsParFamille)"
+        :key="familleId"
+        class="carousel-item"
+        v-show="index === currentIndex"
+      >
+        <div :id="'chart-container-' + familleId" class="chart-container"></div>
       </div>
     </div>
   </div>
@@ -49,234 +19,198 @@ import exporting from "highcharts/modules/exporting";
 import exportData from "highcharts/modules/export-data";
 import accessibility from "highcharts/modules/accessibility";
 import { getAccessToken } from "@/services/authService.js";
+import axios from "axios";
+
+exporting(Highcharts);
+exportData(Highcharts);
+accessibility(Highcharts);
 
 export default {
   data() {
     return {
-      slides: [],
+      produit_conso: [],
+      famille: [],
+      enquete: [],
+      produitsParFamille: {},
+      currentIndex: 0,
     };
   },
-  async mounted() {
-    exporting(Highcharts);
-    exportData(Highcharts);
-    accessibility(Highcharts);
-    await this.populateCarousel();
+  name: "HighchartsComponent",
+  mounted() {
+    this.populateData();
+    this.startCarousel();
   },
   methods: {
     async fetchData(url) {
       const token = await getAccessToken();
       try {
-        const response = await fetch(url, {
-          method: "GET",
+        const response = await axios.get(url, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP ! statut : ${response.status}`);
-        }
-
-        return await response.json();
+        return response.data;
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
+        return [];
       }
     },
-    async populateCarousel() {
+
+    async populateData() {
+      const endpoints = [
+        "http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer/",
+        "http://92.112.194.154:8000/api/enquetes/marches-prix/consommations",
+        "http://92.112.194.154:8000/api/parametrages/familles",
+      ];
+
       try {
-        const produitsData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/produits"
+        const [produit_conso, enquete, famille] = await axios.all(
+          endpoints.map((endpoint) => this.fetchData(endpoint))
         );
-        const evolutionData = await this.fetchData(
-          "http://92.112.194.154:8000/api/enquetes/marches-prix/grossistes"
-        );
-        const slides = [];
 
-        const produitsArray = produitsData
-          .filter((produit) => produit.affichage_ecran === true)
-          .map((produit) => ({
-            nom_produit: produit.nom_produit,
-            image: produit.image || "",
-            evolution: evolutionData
-              .filter(
-                (item) =>
-                  item.produit_relation.nom_produit === produit.nom_produit
-              )
-              .map((item) => ({
-                date: new Date(item.date_enregistrement).toLocaleDateString(),
-                prix: item.prix_unitaire_vente,
-              })),
-          }))
-          .filter((produit) => produit.evolution.length > 0);
+        this.produit_conso = produit_conso;
+        this.enquete = enquete;
+        this.famille = famille;
 
-        const itemsPerPage = 2;
-        for (let i = 0; i < produitsArray.length; i += itemsPerPage) {
-          const slideItems = produitsArray.slice(i, i + itemsPerPage);
-          slides.push(slideItems);
+        const produitsParFamille = {};
 
-          // Dessiner les graphiques pour chaque produit
-          slideItems.forEach(async (produit, index) => {
-            const dernierPrixData = await this.fetchData(
-              `http://92.112.194.154:8000/api/parametrages/marches/prix-dernier/produit-marche?type=PRODUIT&name=${produit.nom_produit}`
-            );
-            this.drawChart(
-              `chart-${Math.floor(i / itemsPerPage)}-${index}`,
-              produit.evolution,
-              dernierPrixData
-            );
-          });
+        // Organisation des données avec prix et dates d'enregistrement
+        this.enquete.forEach((item) => {
+          const codeProduit = item.produit_relation?.code_produit;
+          const nomProduit = item.produit_relation?.nom_produit; // Nom du produit
+          const idFamilleProduit = item.produit_relation?.famille_produit;
+          const prix = item.prix_fg_kg;
+          const dateEnregistrement = item.date_enregistrement; // Date d'enregistrement du prix
+
+          if (codeProduit && idFamilleProduit) {
+            if (!produitsParFamille[idFamilleProduit]) {
+              produitsParFamille[idFamilleProduit] = {};
+            }
+
+            if (!produitsParFamille[idFamilleProduit][codeProduit]) {
+              produitsParFamille[idFamilleProduit][codeProduit] = {
+                nom: nomProduit,
+                data: [],
+              };
+            }
+
+            // Ajout du prix et de la date d'enregistrement dans le tableau du produit
+            produitsParFamille[idFamilleProduit][codeProduit].data.push({
+              prix,
+              date: new Date(dateEnregistrement).toLocaleDateString("fr-FR"),
+            });
+          }
+        });
+
+        // Limiter à 5 valeurs par produit
+        for (const familleId in produitsParFamille) {
+          for (const codeProduit in produitsParFamille[familleId]) {
+            produitsParFamille[familleId][codeProduit].data =
+              produitsParFamille[familleId][codeProduit].data.slice(0, 5);
+          }
         }
 
-        this.slides = slides;
+        this.produitsParFamille = produitsParFamille;
 
-        // Navigation du carrousel
-        this.$nextTick(() => {
-          let currentSlide = 0;
-          const totalSlides = this.slides.length;
-
-          const showSlide = (index) => {
-            if (this.$refs.carousel) {
-              this.$refs.carousel.style.transform = `translateX(-${
-                index * 100
-              }%)`;
-            }
-          };
-
-          showSlide(currentSlide); // Affiche la première slide
-
-          setInterval(() => {
-            currentSlide = (currentSlide + 1) % totalSlides;
-            showSlide(currentSlide);
-          }, 5000);
-        });
+        this.renderChart();
       } catch (error) {
-        console.error("Erreur lors du peuplement du carrousel :", error);
+        console.error("Erreur lors du peuplement des données :", error);
       }
     },
-    drawChart(containerId, data, dernierPrixData) {
-      const dernierPrix = dernierPrixData.prix_kg;
-      const dernierDate = new Date(
-        dernierPrixData.date_enquete
-      ).toLocaleDateString();
 
-      const fullData = [...data, { date: dernierDate, prix: dernierPrix }];
+    renderChart() {
+      this.$nextTick(() => {
+        if (Object.keys(this.produitsParFamille).length === 0) {
+          console.error("Aucune donnée trouvée pour les produits par famille.");
+          return;
+        }
 
-      Highcharts.chart(containerId, {
-        chart: {
-          type: "line",
-        },
-        title: {
-          text: "Prix unitaire vente au fil du temps",
-        },
-        xAxis: {
-          categories: fullData.map((item) => item.date),
-          title: {
-            text: "Date",
-          },
-        },
-        yAxis: {
-          title: {
-            text: "Prix Unitaire Vente",
-          },
-        },
-        series: [
-          {
-            name: "Prix",
-            data: fullData.map((item) => item.prix),
-          },
-        ],
+        for (const familleId in this.produitsParFamille) {
+          const produits = this.produitsParFamille[familleId];
+          const famille =
+            this.famille.find(
+              (f) => f.id_famille_produit === parseInt(familleId)
+            )?.nom_famille_produit || `Famille ${familleId}`;
+
+          const seriesData = Object.keys(produits).map((codeProduit) => ({
+            name: produits[codeProduit].nom, // Utiliser le nom du produit
+            data: produits[codeProduit].data.map((item) => item.prix), // Récupérer les prix
+          }));
+
+          const dates = produits[Object.keys(produits)[0]].data.map(
+            (item) => item.date // Récupérer les dates d'enregistrement
+          );
+
+          const containerId = `chart-container-${familleId}`;
+          const container = document.getElementById(containerId);
+
+          if (!container) {
+            console.error(`Le conteneur #${containerId} est introuvable.`);
+            continue;
+          }
+
+          Highcharts.chart(containerId, {
+            chart: {
+              type: "line",
+            },
+            title: {
+              text: `Famille de produit - ${famille}`,
+            },
+            xAxis: {
+              categories: dates, // Utiliser les dates d'enregistrement comme catégories
+              title: {
+                text: "Dates d'enquetes",
+              },
+            },
+            yAxis: {
+              title: {
+                text: "Prix (kg)",
+              },
+            },
+            plotOptions: {
+              line: {
+                dataLabels: {
+                  enabled: true,
+                },
+                enableMouseTracking: true,
+              },
+            },
+            series: seriesData,
+          });
+        }
       });
+    },
+
+    startCarousel() {
+      setInterval(() => {
+        this.currentIndex =
+          (this.currentIndex + 1) % Object.keys(this.produitsParFamille).length;
+      }, 8000);
     },
   },
 };
 </script>
 
 <style scoped>
-/* Styling adjustments for table layout and charts */
-body {
-  margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f4f4f9;
-  color: #333;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-h1 {
-  margin: 0;
-  padding: 20px;
-  background-color: #e9bc18;
-  color: #ffffff;
-  text-align: center;
-  font-size: 2rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
 .carousel-container {
   overflow: hidden;
-  height: calc(100vh - 80px);
-  padding: 20px;
-  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .carousel {
   display: flex;
-  transition: transform 0.5s ease;
 }
 
 .carousel-item {
-  display: flex;
   min-width: 100%;
-  box-sizing: border-box;
-  gap: 20px;
-  padding: 20px;
+  padding: 10px;
 }
 
-.tables-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  flex: 1;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  box-shadow: 0 2px 15px rgba(64, 64, 64, 0.1);
-  font-size: 1.2rem;
-}
-
-th,
-td {
-  padding: 20px;
-  border: 1px solid #ddd;
-  text-align: left;
-}
-
-th {
-  background-color: #369f4a;
-  color: #ffffff;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-tr:nth-child(even) {
-  background-color: #f8f8f8;
-}
-
-tr:hover {
-  background-color: #e2e8f0;
-}
-
-.product-image {
-  max-width: 120px;
-  max-height: 120px;
-  object-fit: cover;
-  border-radius: 8px;
-  box-shadow: 0 2px 15px rgba(64, 64, 64, 0.1);
+.chart-container {
+  width: 900px;
+  height: 500px;
 }
 </style>

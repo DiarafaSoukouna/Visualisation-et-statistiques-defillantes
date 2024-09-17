@@ -15,6 +15,7 @@
     "highcharts-accessibility": "^0.1.7",
     "highcharts-export-data": "^0.1.7",
     "highcharts-exporting": "^0.1.7",
+    "swiper": "^11.1.12",
     "vue": "^3.2.13",
     "vue-router": "^4.4.3"
   },
