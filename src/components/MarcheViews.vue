@@ -1,4 +1,5 @@
 <template>
+  <Loader v-if="isLoading"></Loader>
   <div>
     <div class="carousel-container">
       <div class="carousel" ref="carousel">
@@ -9,8 +10,8 @@
         >
           <h1>
             <span style="color: #e9bc18">REGION :</span>
-            {{ toUpperCase(slide.prefecture) }}
-            <span style="color: #e9bc18">CATEGORIE :</span>
+            {{ toUpperCase(slide.region) }}
+            <span style="color: #e9bc18">FAMILLE :</span>
             {{ toUpperCase(slide.famille) }}
           </h1>
 
@@ -28,17 +29,10 @@
               <tr v-for="(item, idx) in slide.groupedMarches" :key="idx">
                 <td>{{ item.nom_marche }}</td>
                 <td>
-                  <div
-                    style="
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                    "
-                  >
-                    <span>{{ formatDate(item.date_enregistrement) }}</span>
-                    <span>
-                      {{ getDernierPrix(product, item.id_marche).date }}
-                    </span>
+                  <div class="date-container">
+                    <span>{{ item.dateEnquete }}</span>
+                    <!-- <hr class="date-separator" /> -->
+                    <span>{{ item.dateDernier }}</span>
                   </div>
                 </td>
                 <td v-for="product in filteredProducts" :key="product">
@@ -56,19 +50,19 @@
                         text-align: left;
                       "
                     >
-                      <span>{{ item.prixProduit[product] || "0" }}</span>
                       <span>
-                        {{
-                          getDernierPrix(product, item.id_marche).prix_kg || "0"
-                        }}
+                        {{ item.prixProduit[product]?.prix_enquete || "-" }}
+                      </span>
+                      <span>
+                        {{ item.prixProduit[product]?.dernierprix || "-" }}
                       </span>
                     </div>
                     <div style="text-align: right; padding-left: 10px">
                       <span>
                         {{
                           calculateEvolution(
-                            item.prixProduit[product],
-                            getDernierPrix(product, item.id_marche).prix_kg
+                            item.prixProduit[product]?.prix_enquete,
+                            item.prixProduit[product]?.dernierprix
                           )
                         }}
                       </span>
@@ -86,15 +80,11 @@
 
 <script>
 import axios from "axios";
-import { getAccessToken } from "@/services/authService.js";
-
-// Fonction pour formater la date
-function formatDate(dateString) {
-  const options = { day: "2-digit", month: "2-digit", year: "numeric" };
-  return new Date(dateString).toLocaleDateString("fr-FR", options);
-}
-
+import Loader from "@/components/loader.vue";
 export default {
+  components: {
+    Loader,
+  },
   data() {
     return {
       groupedMarches: [],
@@ -102,17 +92,17 @@ export default {
       currentSlide: 0,
       slideInterval: null,
       uniqueProducts: [],
+      produitPhares: [],
+      isLoading: true,
     };
   },
   computed: {
     generateSlides() {
       const slides = [];
-      for (const [prefecture, familles] of Object.entries(
-        this.groupedMarches
-      )) {
+      for (const [region, familles] of Object.entries(this.groupedMarches)) {
         for (const [famille, marches] of Object.entries(familles)) {
           slides.push({
-            prefecture,
+            region,
             famille,
             groupedMarches: marches,
           });
@@ -121,21 +111,22 @@ export default {
       return slides;
     },
     filteredProducts() {
-      return this.uniqueProducts
+      const currentFamille = this.carouselSlides[this.currentSlide]?.famille;
+      if (!currentFamille) return [];
+
+      return this.uniqueProducts[currentFamille]
         .filter((product) =>
           this.produitPhares.some(
             (produitPhare) => produitPhare.nom_produit === product
           )
         )
-        .slice(0, 8);
+        .slice(0, 8); // Limite à 8 produits
     },
   },
   async mounted() {
     await this.populateCarousel();
     this.carouselSlides = this.generateSlides;
-    this.$nextTick(() => {
-      this.startCarousel();
-    });
+    this.startCarousel();
   },
   beforeUnmount() {
     if (this.slideInterval) {
@@ -147,17 +138,12 @@ export default {
       return text.toUpperCase();
     },
     formatDate(dateString) {
-      return formatDate(dateString);
+      const options = { day: "2-digit", month: "2-digit", year: "numeric" };
+      return new Date(dateString).toLocaleDateString("fr-FR", options);
     },
     async fetchData(url) {
-      const token = await getAccessToken();
       try {
-        const response = await axios.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(url);
         return response.data;
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
@@ -166,188 +152,109 @@ export default {
     },
     async populateCarousel() {
       try {
-        const prefecturesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/localites/prefectures"
-        );
-        const marchesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/marches"
-        );
         const enquetesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/enquetes/marches-prix/consommations"
-        );
-        const famillesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/familles"
-        );
-        const regionsData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/localites/regions"
+          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/enquetes/marches-prix/tous-prix-produit/par-famille"
         );
         this.produitPhares = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer"
+          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer"
         );
 
-        const prefectureMap = new Map();
-        prefecturesData.forEach((prefecture) => {
-          prefectureMap.set(prefecture.id_prefecture, prefecture.region);
-        });
-
-        const regionMap = new Map();
-        regionsData.forEach((region) => {
-          regionMap.set(region.id_region, region.nom_region);
-        });
-
         const grouped = {};
-        const productsSet = new Set();
+        const productsByFamily = {};
 
         for (const enquete of enquetesData) {
-          const marche =
-            enquete.enquete_relation && enquete.enquete_relation.marche
-              ? marchesData.find(
-                  (m) => m.id_marche === enquete.enquete_relation.marche
-                )
-              : null;
+          for (const produit of enquete.produits) {
+            const prices = produit.prices;
+            const premierPrix = prices[0] ? prices[0].prix_kg : null;
+            const deuxiemePrix = prices[1] ? prices[1].prix_kg : null;
+            const datePremier = prices[0] ? prices[0].date_enquete : null;
+            const dateDeuxieme = prices[1] ? prices[1].date_enquete : null;
 
-          const famille = famillesData.find(
-            (f) =>
-              f.id_famille_produit === enquete.produit_relation.famille_produit
-          );
+            for (const price of prices) {
+              const region = price.region || "Non défini";
+              const famille = enquete.famille || "Non défini";
+              const nomProduit = price.produit || "Non défini";
+              const idMarche = price.marche;
 
-          const prefectureId = marche?.commune_relation?.prefecture;
-          const regionId = prefectureMap.get(prefectureId);
-          const nomRegion = regionMap.get(regionId) || "Non défini";
-          const nomFamille = famille
-            ? famille.nom_famille_produit
-            : "Non défini";
-          const nomProduit =
-            enquete.produit_relation.nom_produit || "Non défini";
-          const idMarche = marche?.id_marche;
+              // Regrouper les produits par famille
+              if (!productsByFamily[famille]) {
+                productsByFamily[famille] = new Set();
+              }
+              productsByFamily[famille].add(nomProduit);
 
-          productsSet.add(nomProduit);
+              if (!grouped[region]) {
+                grouped[region] = {};
+              }
+              if (!grouped[region][famille]) {
+                grouped[region][famille] = [];
+              }
 
-          if (!grouped[nomRegion]) {
-            grouped[nomRegion] = {};
-          }
-          if (!grouped[nomRegion][nomFamille]) {
-            grouped[nomRegion][nomFamille] = [];
-          }
+              let existingMarket = grouped[region][famille].find(
+                (m) => m.nom_marche === idMarche
+              );
 
-          let existingMarket = grouped[nomRegion][nomFamille].find(
-            (m) => m.id_marche === idMarche
-          );
+              if (!existingMarket) {
+                existingMarket = {
+                  id_marche: idMarche,
+                  nom_marche: price.marche || "Non défini",
+                  dateDernier: dateDeuxieme ? dateDeuxieme : null,
+                  dateEnquete: datePremier ? datePremier : null,
+                  prixProduit: {},
+                };
+                grouped[region][famille].push(existingMarket);
+              }
 
-          // Vérifier si le produit a une donnée valide (prix non nul)
-          if (enquete.prix_fg_kg && enquete.prix_fg_kg > 0) {
-            if (existingMarket) {
-              existingMarket.prixProduit[nomProduit] = enquete.prix_fg_kg;
-            } else {
-              grouped[nomRegion][nomFamille].push({
-                id_marche: idMarche,
-                nom_marche: marche ? marche.nom_marche : "Non défini",
-                date_enregistrement: enquete.date_enregistrement,
-                prixProduit: {
-                  [nomProduit]: enquete.prix_fg_kg,
-                },
-              });
+              existingMarket.prixProduit[nomProduit] = {
+                dernierprix: premierPrix,
+                prix_enquete: deuxiemePrix,
+                dateDernier: dateDeuxieme ? dateDeuxieme : null,
+                dateEnquete: datePremier ? datePremier : null,
+              };
             }
           }
         }
 
-        // Filtrer les familles et marchés sans données de produits valides
-        for (const region in grouped) {
-          for (const famille in grouped[region]) {
-            grouped[region][famille] = grouped[region][famille].filter(
-              (marche) =>
-                Object.values(marche.prixProduit).some(
-                  (prix) => prix !== undefined && prix !== null && prix > 0
-                )
-            );
-
-            // Si aucun marché dans la famille n'a de produits valides, supprimer la famille
-            if (grouped[region][famille].length === 0) {
-              delete grouped[region][famille];
-            }
-          }
-
-          // Si aucune famille dans la région n'a de marchés valides, supprimer la région
-          if (Object.keys(grouped[region]).length === 0) {
-            delete grouped[region];
-          }
+        // Convertir les Sets en tableaux
+        for (const famille in productsByFamily) {
+          productsByFamily[famille] = Array.from(productsByFamily[famille]);
         }
 
         this.groupedMarches = grouped;
-        this.uniqueProducts = Array.from(productsSet);
+        this.uniqueProducts = productsByFamily;
+        this.isLoading = false;
       } catch (error) {
         console.error("Erreur lors du peuplement du carrousel :", error);
       }
     },
-    async getDernierPrix(nomProduit, id_marche) {
-      try {
-        const data = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/marches/prix-dernier/par-marche"
-        );
-
-        const marcheData = data.find(
-          (marche) =>
-            marche.id_marche === id_marche && marche.produit === nomProduit
-        );
-        console.log(marcheData);
-
-        // Si aucune donnée n'est trouvée, retourner des valeurs par défaut
-        if (!marcheData) {
-          return { prix_kg: "Non défini", date: "Non défini" };
-        }
-
-        // Retourner les informations sur le prix et la date
-        return {
-          prix_kg: marcheData.prix_kg || "Non défini",
-          date: marcheData.date_enquete || "Non défini",
-        };
-      } catch (error) {
-        console.error(
-          "Erreur lors de la récupération du dernier prix :",
-          error
-        );
-        return { prix_kg: "Non défini", date: "Non défini" };
-      }
-    },
-
     calculateEvolution(currentPrice, lastPrice) {
       const current = parseFloat(currentPrice) || 0;
       const last = parseFloat(lastPrice) || 0;
-
-      if (last === 0) {
-        return "0%";
-      }
-
+      if (last === 0) return "-%";
       const evolution = ((current - last) / last) * 100;
       return `${evolution.toFixed(2)}%`;
     },
-
     startCarousel() {
       const totalSlides = this.carouselSlides.length;
-      const slideDuration = 5000;
-      const slideWidth = 100; // Largeur de chaque slide en pourcentage
+      const slideDuration = 7000;
+      const slideWidth = 100;
 
       if (totalSlides === 0) return;
 
       this.slideInterval = setInterval(() => {
         if (this.$refs.carousel) {
           this.currentSlide = (this.currentSlide + 1) % totalSlides;
-
-          // Appliquer la transformation pour faire défiler le carrousel
           this.$refs.carousel.style.transform = `translateX(-${
             this.currentSlide * slideWidth
           }%)`;
 
-          // Réinitialiser la position lorsque nous atteignons la fin
           if (this.currentSlide === 0) {
             setTimeout(() => {
-              this.$refs.carousel.style.transition = "none"; // Pas de transition pour la réinitialisation
+              this.$refs.carousel.style.transition = "none";
               this.$refs.carousel.style.transform = `translateX(0)`;
-              // Remettre la transition après un court délai
               setTimeout(() => {
                 this.$refs.carousel.style.transition = "transform 1s ease";
-              }, 20); // Doit être suffisamment court pour éviter le saut visible
-            }, slideDuration); // Assurez-vous que ce délai correspond à la durée du défilement
+              }, 20);
+            }, slideDuration);
           }
         }
       }, slideDuration);
@@ -360,7 +267,7 @@ export default {
 .carousel-container {
   overflow: hidden;
   width: 100%;
-  background-color: #fff; /* Couleur de fond du carrousel */
+  background-color: #fff;
 }
 
 .carousel {
@@ -375,20 +282,58 @@ export default {
 }
 
 .highlight {
-  color: #e9bc18; /* Couleur pour les titres REGION et CATEGORIE */
+  color: #e9bc18;
 }
 
 .carousel table {
   border-collapse: collapse;
   width: 100%;
-  background-color: #fff; /* Couleur de fond de la table */
+  background-color: #fff;
   margin-top: 10px;
+}
+.date-separator {
+  border-top: 1px solid #000;
+  margin: 5px 0;
 }
 h1 {
   margin: 20px 0;
   text-align: center;
   font-size: 2.5rem;
   color: #369f4a;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+}
+
+th,
+td {
+  border: 1px solid black;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+th {
+  background-color: #4caf50;
+  color: white;
+}
+.date-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.date-cell span {
+  display: block;
+}
+.date-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.date-container span {
+  margin: 2px 0; /* Adds spacing between dates */
 }
 .carousel th,
 .carousel td {
@@ -399,7 +344,6 @@ h1 {
 
 .carousel thead {
   background-color: #369f4a;
-  /* Couleur de fond des en-têtes */
 }
 
 .carousel th {
@@ -428,14 +372,5 @@ h1 {
 .evolution {
   text-align: right;
   padding-left: 10px;
-}
-
-.price-details span,
-.evolution span {
-  display: block;
-}
-
-.carousel tbody tr:nth-child(even) {
-  background-color: #f9f9f9; /* Couleur de fond des lignes paires */
 }
 </style>

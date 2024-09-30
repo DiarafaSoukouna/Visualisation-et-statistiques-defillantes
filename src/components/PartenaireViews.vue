@@ -4,11 +4,11 @@
       <img src="../assets/logo.png" alt="Logo" />
       <h1>Nos Partenaires</h1>
     </header>
-    <h2 class="introduction">
+    <!-- <h2 class="introduction">
       Le Système d'Information sur les Marchés de la Guinée collabore avec de
       nombreuses organisations et structures pour améliorer la qualité de ses
       services et soutenir les acteurs du secteur agricole.
-    </h2>
+    </h2> -->
 
     <div class="partners-container">
       <div
@@ -48,6 +48,14 @@ export default {
         {
           name: "Organisation des Nations Unies pour l'Alimentation et l'Agriculture (FAO)",
           image: require("../assets/fao_logo.png"),
+        },
+        {
+          name: "Agence française de developpement (AFD)",
+          image: require("../assets/thumbnail_image.png"),
+        },
+        {
+          name: "SOFRECO",
+          image: require("../assets/Logo SOFRECO.png"),
         },
       ],
     };

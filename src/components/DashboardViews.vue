@@ -33,7 +33,6 @@
 </template>
 
 <script>
-import { getAccessToken } from "@/services/authService.js";
 import axios from "axios";
 
 export default {
@@ -44,21 +43,13 @@ export default {
       redirectCountdown: 10,
     };
   },
-  async mounted() {
-    this.accessToken = await getAccessToken();
-    if (this.accessToken) {
-      this.populateDashboard();
-    }
+  beforeMount() {
+    this.populateDashboard();
   },
   methods: {
     async fetchData(url) {
       try {
-        const response = await axios.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${this.accessToken}`,
-          },
-        });
+        const response = await axios.get(url);
 
         return response.data;
       } catch (error) {
@@ -83,8 +74,8 @@ export default {
         const collecteursData = await this.fetchData(
           "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/magasins"
         );
-        const debarcaderesData = await this.fetchData(
-          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/debarcaderes"
+        const regionsData = await this.fetchData(
+          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/localites/regions"
         );
 
         this.dataStats = [
@@ -93,7 +84,7 @@ export default {
           { title: "Marchés", count: marchesData.length },
           { title: "Produits", count: produitsData.length },
           { title: "Collecteurs", count: collecteursData.length },
-          { title: "Débarcadères", count: debarcaderesData.length },
+          { title: "Régions", count: regionsData.length },
         ];
       } catch (error) {
         console.error("Erreur lors du peuplement du tableau de bord :", error);

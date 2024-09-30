@@ -6,34 +6,44 @@
       <span>Temps restant : {{ remainingTime }}s</span>
     </div>
     <!-- Transition du composant en cours -->
-    <transition-group name="fade" mode="out-in">
-      <component :is="currentComponent" :key="currentComponent"></component>
-    </transition-group>
+    <transition
+      name="fade"
+      @before-enter="beforeEnter"
+      @enter="enter"
+      @leave="leave"
+    >
+      <component :is="currentComponent" :key="currentIndex"></component>
+    </transition>
   </div>
 </template>
 
 <script>
-import Dashboard from "@/components/DashboardViews.vue";
+// import Dashboard from "@/components/DashboardViews.vue";
 import Marche from "@/components/MarcheViews.vue";
 import Partenaire from "@/components/PartenaireViews.vue";
 import Produit from "@/components/ProduitViews.vue";
-import Pourcentage from "@/components/PourcentageViews.vue";
+import Evolution from "@/components/EvolutionViews.vue";
+import Video from "@/components/VideoViews.vue";
+import CarouselItem from "@/components/CarouselItemViews.vue";
+
 export default {
   components: {
-    Dashboard,
     Marche,
     Partenaire,
     Produit,
-    Pourcentage,
+    Evolution,
+    Video,
+    CarouselItem,
   },
   data() {
     return {
       components: [
-        { name: "Dashboard", duration: 10000 },
-        { name: "Marche", duration: 40000 },
+        { name: "Video", duration: 60000 },
+        { name: "Marche", duration: 60000 },
         { name: "Partenaire", duration: 10000 },
-        { name: "Produit", duration: 60000 },
-        { name: "Pourcentage", duration: 10000 },
+        { name: "Produit", duration: 40000 },
+        { name: "Evolution", duration: 75000 },
+        { name: "CarouselItem", duration: 60000 },
       ],
       currentIndex: 0,
       currentTimeout: null,
@@ -47,13 +57,18 @@ export default {
     },
   },
   mounted() {
-    const savedIndex = parseInt(localStorage.getItem("carouselIndex"), 10);
-    if (!isNaN(savedIndex) && savedIndex < this.components.length) {
-      this.currentIndex = savedIndex;
-    }
-    this.startCarousel();
+    this.preloadComponents().then(() => {
+      this.startCarousel();
+    });
   },
   methods: {
+    async preloadComponents() {
+      // Charge tous les composants pour éviter les transitions étranges
+      const promises = this.components.map((component) => {
+        return import(`@/components/${component.name}Views.vue`);
+      });
+      await Promise.all(promises);
+    },
     startCarousel() {
       this.updateRemainingTime();
       this.currentTimeout = setTimeout(() => {
@@ -61,7 +76,6 @@ export default {
       }, this.remainingTime * 1000);
     },
     nextComponent() {
-      localStorage.setItem("carouselIndex", this.currentIndex);
       clearTimeout(this.currentTimeout);
       clearInterval(this.timeUpdateInterval);
 
@@ -78,8 +92,22 @@ export default {
         }
       }, 1000);
     },
+    beforeEnter(el) {
+      el.style.opacity = 0;
+    },
+    enter(el, done) {
+      el.offsetHeight; // Trigger reflow
+      el.style.transition = "opacity 1s";
+      el.style.opacity = 1;
+      done();
+    },
+    leave(el, done) {
+      el.style.transition = "opacity 1s";
+      el.style.opacity = 0;
+      done();
+    },
   },
-  beforeMount() {
+  beforeUnmount() {
     clearTimeout(this.currentTimeout);
     clearInterval(this.timeUpdateInterval);
   },
@@ -90,21 +118,15 @@ export default {
 .carousel-container {
   position: relative;
   height: 100%;
+  overflow: hidden; /* Assure que le contenu excédentaire est caché */
+}
+
+.carousel-wrapper {
   display: flex;
-  flex-direction: column;
+  transition: transform 1s ease-in-out;
+  /* Assure que la transition est fluide */
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 1s;
-}
-
-.fade-enter,
-.fade-leave-to {
-  opacity: 0;
-}
-
-/* Positionnement des informations de la slide en haut */
 .slide-info {
   position: absolute;
   top: 5px;
@@ -119,5 +141,16 @@ export default {
   ); /* Fond transparent pour une meilleure visibilité */
   padding: 5px 10px;
   border-radius: 5px;
+}
+
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: opacity 1s, transform 1s;
+}
+
+.slide-fade-enter,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
 }
 </style>

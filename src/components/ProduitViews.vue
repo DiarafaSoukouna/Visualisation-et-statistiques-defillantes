@@ -1,4 +1,5 @@
 <template>
+  <Loader v-if="isLoading"></Loader>
   <h1>PRIX MOYEN EN FCFA PAR REGION</h1>
   <div v-if="slides && textes && localites">
     <div class="carousel-container">
@@ -61,27 +62,25 @@
 
 <script>
 import axios from "axios";
-import { getAccessToken } from "@/services/authService.js";
+import Loader from "@/components/loader.vue";
 export default {
+  components: {
+    Loader,
+  },
   data() {
     return {
       slides: [],
       textes: [],
       localites: [],
       slideInterval: null,
+      isLoading: true,
     };
   },
 
   methods: {
     async fetchData(url) {
-      const token = await getAccessToken();
       try {
-        const response = await axios.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(url);
         console.log(response.data);
         return response.data;
       } catch (error) {
@@ -92,9 +91,9 @@ export default {
 
     async populateCarousel() {
       const endpoints = [
-        "http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer/",
-        "http://92.112.194.154:8000/api/statistiques/prix-moyen-par-region",
-        "http://92.112.194.154:8000/api/parametrages/localites/regions",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer/",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/statistiques/prix-moyen-par-region",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/localites/regions",
       ];
 
       try {
@@ -111,7 +110,7 @@ export default {
         );
 
         this.textes = prix_moy;
-        console.log(this.localites, this.slides, this.textes);
+        this.isLoading = false;
       } catch (error) {
         console.error("Erreur lors du peuplement du carrousel :", error);
       }

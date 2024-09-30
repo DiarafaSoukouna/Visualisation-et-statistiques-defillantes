@@ -1,4 +1,5 @@
 <template>
+  <Loader v-if="isLoading"></Loader>
   <div class="carousel-container">
     <div class="carousel">
       <div
@@ -14,11 +15,11 @@
 </template>
 
 <script>
+import Loader from "@/components/loader.vue";
 import Highcharts from "highcharts";
 import exporting from "highcharts/modules/exporting";
 import exportData from "highcharts/modules/export-data";
 import accessibility from "highcharts/modules/accessibility";
-import { getAccessToken } from "@/services/authService.js";
 import axios from "axios";
 
 exporting(Highcharts);
@@ -26,13 +27,14 @@ exportData(Highcharts);
 accessibility(Highcharts);
 
 export default {
+  component: {
+    Loader,
+  },
   data() {
     return {
-      produit_conso: [],
-      famille: [],
-      enquete: [],
       produitsParFamille: {},
       currentIndex: 0,
+      isLoading: true,
     };
   },
   name: "HighchartsComponent",
@@ -42,14 +44,8 @@ export default {
   },
   methods: {
     async fetchData(url) {
-      const token = await getAccessToken();
       try {
-        const response = await axios.get(url, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(url);
         return response.data;
       } catch (error) {
         console.error("Erreur lors de la récupération des données :", error);
@@ -58,62 +54,39 @@ export default {
     },
 
     async populateData() {
-      const endpoints = [
-        "http://92.112.194.154:8000/api/parametrages/produits/produits/les-plus-consommer/",
-        "http://92.112.194.154:8000/api/enquetes/marches-prix/consommations",
-        "http://92.112.194.154:8000/api/parametrages/familles",
-      ];
-
+      const apiUrl =
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/enquetes/marches-prix/tous-prix-produit/par-famille";
       try {
-        const [produit_conso, enquete, famille] = await axios.all(
-          endpoints.map((endpoint) => this.fetchData(endpoint))
-        );
-
-        this.produit_conso = produit_conso;
-        this.enquete = enquete;
-        this.famille = famille;
-
+        const data = await this.fetchData(apiUrl);
         const produitsParFamille = {};
 
-        // Organisation des données avec prix et dates d'enregistrement
-        this.enquete.forEach((item) => {
-          const codeProduit = item.produit_relation?.code_produit;
-          const nomProduit = item.produit_relation?.nom_produit; // Nom du produit
-          const idFamilleProduit = item.produit_relation?.famille_produit;
-          const prix = item.prix_fg_kg;
-          const dateEnregistrement = item.date_enregistrement; // Date d'enregistrement du prix
+        data.forEach((famille) => {
+          const familleNom = famille.famille;
+          // Limiter à 5 produits par famille
+          const produitsLimites = famille.produits.slice(0, 7);
 
-          if (codeProduit && idFamilleProduit) {
-            if (!produitsParFamille[idFamilleProduit]) {
-              produitsParFamille[idFamilleProduit] = {};
+          produitsLimites.forEach((produit) => {
+            const produitNom = produit.produit.nom_produit;
+            const codeProduit = produit.produit.code_produit;
+            const prixData = produit.prices.map((price) => ({
+              prix: price.prix_kg,
+              date: new Date(price.date_enquete).toLocaleDateString("fr-FR"),
+            }));
+
+            if (!produitsParFamille[familleNom]) {
+              produitsParFamille[familleNom] = {};
             }
 
-            if (!produitsParFamille[idFamilleProduit][codeProduit]) {
-              produitsParFamille[idFamilleProduit][codeProduit] = {
-                nom: nomProduit,
-                data: [],
-              };
-            }
-
-            // Ajout du prix et de la date d'enregistrement dans le tableau du produit
-            produitsParFamille[idFamilleProduit][codeProduit].data.push({
-              prix,
-              date: new Date(dateEnregistrement).toLocaleDateString("fr-FR"),
-            });
-          }
+            produitsParFamille[familleNom][codeProduit] = {
+              nom: produitNom,
+              data: prixData.slice(0, 5), // Limiter à 5 valeurs par produit
+            };
+          });
         });
 
-        // Limiter à 5 valeurs par produit
-        for (const familleId in produitsParFamille) {
-          for (const codeProduit in produitsParFamille[familleId]) {
-            produitsParFamille[familleId][codeProduit].data =
-              produitsParFamille[familleId][codeProduit].data.slice(0, 5);
-          }
-        }
-
         this.produitsParFamille = produitsParFamille;
-
         this.renderChart();
+        this.isLoading = false;
       } catch (error) {
         console.error("Erreur lors du peuplement des données :", error);
       }
@@ -126,23 +99,19 @@ export default {
           return;
         }
 
-        for (const familleId in this.produitsParFamille) {
-          const produits = this.produitsParFamille[familleId];
-          const famille =
-            this.famille.find(
-              (f) => f.id_famille_produit === parseInt(familleId)
-            )?.nom_famille_produit || `Famille ${familleId}`;
+        for (const familleNom in this.produitsParFamille) {
+          const produits = this.produitsParFamille[familleNom];
 
           const seriesData = Object.keys(produits).map((codeProduit) => ({
-            name: produits[codeProduit].nom, // Utiliser le nom du produit
-            data: produits[codeProduit].data.map((item) => item.prix), // Récupérer les prix
+            name: produits[codeProduit].nom,
+            data: produits[codeProduit].data.map((item) => item.prix),
           }));
 
           const dates = produits[Object.keys(produits)[0]].data.map(
-            (item) => item.date // Récupérer les dates d'enregistrement
+            (item) => item.date
           );
 
-          const containerId = `chart-container-${familleId}`;
+          const containerId = `chart-container-${familleNom}`;
           const container = document.getElementById(containerId);
 
           if (!container) {
@@ -155,12 +124,15 @@ export default {
               type: "line",
             },
             title: {
-              text: `Famille de produit - ${famille}`,
+              text: `Groupe de produit : ${familleNom}`,
+              style: {
+                fontSize: "32px",
+              },
             },
             xAxis: {
-              categories: dates, // Utiliser les dates d'enregistrement comme catégories
+              categories: dates,
               title: {
-                text: "Dates d'enquetes",
+                text: "Dates d'enquêtes",
               },
             },
             yAxis: {
@@ -186,7 +158,7 @@ export default {
       setInterval(() => {
         this.currentIndex =
           (this.currentIndex + 1) % Object.keys(this.produitsParFamille).length;
-      }, 8000);
+      }, 15000);
     },
   },
 };
@@ -210,7 +182,7 @@ export default {
 }
 
 .chart-container {
-  width: 900px;
+  width: 1000px;
   height: 500px;
 }
 </style>

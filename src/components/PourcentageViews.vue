@@ -49,9 +49,9 @@ export default {
     },
     async populate() {
       const endpoints = [
-        "http://92.112.194.154:8000/api/enquetes/marches-prix/consommations",
-        "http://92.112.194.154:8000/api/enquetes/marches-prix/collectes",
-        "http://92.112.194.154:8000/api/enquetes/marches-prix/grossistes",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/enquetes/marches-prix/consommations",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/enquetes/marches-prix/collectes",
+        "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/enquetes/marches-prix/grossistes",
       ];
 
       try {

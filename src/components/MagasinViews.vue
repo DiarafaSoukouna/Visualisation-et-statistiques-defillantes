@@ -65,10 +65,10 @@ export default {
     async populateCarousel() {
       try {
         const prefecturesData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/localites/prefectures"
+          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/localites/prefectures"
         );
         const magasinsData = await this.fetchData(
-          "http://92.112.194.154:8000/api/parametrages/magasins"
+          "https://cors-proxy.fringe.zone/http://92.112.194.154:8000/api/parametrages/magasins"
         );
 
         const prefectureMap = new Map(

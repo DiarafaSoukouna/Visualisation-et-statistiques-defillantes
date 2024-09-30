@@ -2,7 +2,6 @@
 
 import { createRouter, createWebHistory } from "vue-router"; // Pour Vue 3
 
-import HomeView from "../components/HelloWorld.vue";
 import Dashboard from "../components/DashboardViews.vue";
 import Prefectures from "../components/PrefectureViews.vue";
 import rapport from "../views/rapportCarousel.vue";
@@ -12,12 +11,14 @@ import Magasin from "../components/MagasinViews.vue";
 import Evolution from "../components/EvolutionViews.vue";
 import Pourcentage from "../components/PourcentageViews.vue";
 import Partenaire from "../components/PartenaireViews.vue";
+import Video from "@/components/VideoViews.vue";
+import Carousel from "../components/CarouselItemViews.vue";
 
 const routes = [
   {
     path: "/",
-    name: "Home",
-    component: HomeView,
+    name: "Rapport",
+    component: rapport,
   },
   {
     path: "/dashboard",
@@ -63,6 +64,16 @@ const routes = [
     path: "/partenaire",
     name: "partenaire",
     component: Partenaire,
+  },
+  {
+    path: "/Video",
+    name: "Video",
+    component: Video,
+  },
+  {
+    path: "/carousel",
+    name: "carousel",
+    component: Carousel,
   },
 ];
 
